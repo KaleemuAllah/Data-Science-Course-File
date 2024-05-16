@@ -4,6 +4,7 @@ import numpy as np
 import seaborn as sns
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
@@ -17,7 +18,7 @@ st.title("Machine Learning Application")
 st.write("Welcome! This application allows you to build and evaluate machine learning models using your own dataset or example datasets.")
 
 # Step 2: Ask the user to upload data or use example data
-upload_option = st.sidebar.selectbox("Do you want to upload your own data or use an example dataset?", 
+upload_option = st.sidebar.radio("Do you want to upload your own data or use an example dataset?", 
                                      ["Upload Data", "Use Example Data"])
 
 # Step 3: Handle data upload
@@ -60,22 +61,26 @@ if 'data' in locals():
     target = st.selectbox("Select Target", options=data.columns.tolist())
 
     if features and target:
-        X = data[features]
-        y = data[target]
+        X = data[features].copy()
+        y = data[target].copy()
 
         # Step 8: Pre-process the data
         # Encode categorical features
         encoders = {}
-        for column in X.select_dtypes(include=['object']).columns:
+        for column in X.select_dtypes(include=['object', 'category']).columns:
             encoder = LabelEncoder()
             X[column] = encoder.fit_transform(X[column].astype(str))
             encoders[column] = encoder
 
+        if y.dtype == 'object' or y.dtype.name == 'category':
+            y_encoder = LabelEncoder()
+            y = y_encoder.fit_transform(y)
+
         imputer = IterativeImputer()
         X = imputer.fit_transform(X)
 
-        if problem_type == "Regression":
-            y = y.values.reshape(-1, 1)
+        if problem_type == "Regression" and y.ndim == 1:
+            y = y.to_numpy().reshape(-1, 1)
             y = imputer.fit_transform(y).ravel()
 
         scaler = StandardScaler()
@@ -126,9 +131,9 @@ if 'data' in locals():
                 st.write(f"R² Score: {r2}")
             else:
                 accuracy = accuracy_score(y_test, y_pred)
-                precision = precision_score(y_test, y_pred, average='weighted')
-                recall = recall_score(y_test, y_pred, average='weighted')
-                f1 = f1_score(y_test, y_pred, average='weighted')
+                precision = precision_score(y_test, y_pred, average='weighted', zero_division=0)
+                recall = recall_score(y_test, y_pred, average='weighted', zero_division=0)
+                f1 = f1_score(y_test, y_pred, average='weighted', zero_division=0)
                 cm = confusion_matrix(y_test, y_pred)
                 st.write("### Evaluation Metrics")
                 st.write(f"Accuracy: {accuracy}")
@@ -140,6 +145,7 @@ if 'data' in locals():
 
             # Step 14: Highlight the best model based on evaluation metric
             # For simplicity, we highlight only the evaluation results
+            st.write(f"The selected model is {model_choice}.")
 
             # Step 15: Save the model
             save_model = st.sidebar.button("Download Model")
